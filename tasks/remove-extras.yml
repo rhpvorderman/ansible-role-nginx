@@ -1,30 +1,34 @@
 ---
 - name: Find enabled sites
-  shell: ls -1 {{nginx_conf_dir}}/sites-enabled || true
+  find:
+    paths: {{nginx_conf_dir}}/sites-enabled
   register: enabled_sites
-  changed_when: False
 
 - name: Disable unmanaged sites
   file:
-    path: "{{nginx_conf_dir}}/sites-enabled/{{ item }}"
+    path: "{{nginx_conf_dir}}/sites-enabled/{{ item.path | basename }}"
     state: absent
-  with_items: "{{ enabled_sites.stdout_lines | default([]) }}"
+  with_items: "{{ enabled_sites.files | default([]) }}"
   # 'item.conf' => 'item'
-  when: item[:-5] not in nginx_sites.keys()
+  when: item.path | basename not in nginx_sites.keys()
   notify:
     - reload nginx
 
 - name: Find config files
-  shell: find {{nginx_conf_dir}}/conf.d -maxdepth 1 -type f -name '*.conf' -exec basename {} \;
+  find:
+    path: {{nginx_conf_dir}}/conf.d
+    patterns: *.conf
+    file_type: file
+     -maxdepth 1 -exec basename {} \;
   register: config_files
   changed_when: False
 
 - name: Remove unmanaged config files
   file:
-    name: "{{nginx_conf_dir}}/conf.d/{{ item }}"
+    name: "{{nginx_conf_dir}}/conf.d/{{ item.path | basename }}"
     state: absent
-  with_items: "{{ config_files.stdout_lines | default([]) }}"
+  with_items: "{{ config_files.files | default([]) }}"
   # 'item.conf' => 'item'
-  when: item[:-5] not in nginx_configs.keys()
+  when: item.path | basename | splitext  not in nginx_configs.keys()
   notify:
     - reload nginx
